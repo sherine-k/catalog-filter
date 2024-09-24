@@ -110,6 +110,21 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 			_, ok := f.chConfigs[o.Package]
 			return !ok && o.Package != ""
 		})
+	} else {
+		// there was no filtering.
+		// we want to keep all packages; for each package its default channel;
+		fbc.Channels = slices.DeleteFunc(fbc.Channels, func(ch declcfg.Channel) bool {
+			// find the package that this channel belongs to
+			pkgIndex, exists := slices.BinarySearchFunc(fbc.Packages, declcfg.Package{Name: ch.Package}, func(pkg, channelPackage declcfg.Package) int {
+				return strings.Compare(pkg.Name, channelPackage.Name)
+			})
+			// keep only the channel if it is the default channel
+			if exists {
+				return fbc.Packages[pkgIndex].DefaultChannel != ch.Name
+			}
+			return false
+		})
+
 	}
 	remainingChannels := make(map[string]sets.Set[string], len(fbc.Packages))
 	for _, ch := range fbc.Channels {
@@ -169,6 +184,9 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 					return nil, err
 				}
 				keepEntries.Insert(ch.head.Name)
+				fbc.Channels[i].Entries = slices.DeleteFunc(fbc.Channels[i].Entries, func(e declcfg.ChannelEntry) bool {
+					return !keepEntries.Has(e.Name)
+				})
 			}
 
 		} else if chConfig.VersionRange == "" {
@@ -200,6 +218,7 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 			keepBundles[fbcCh.Package] = sets.New[string]()
 		}
 		keepBundles[fbcCh.Package] = keepBundles[fbcCh.Package].Union(keepEntries)
+
 	}
 
 	fbc.Bundles = slices.DeleteFunc(fbc.Bundles, func(b declcfg.Bundle) bool {

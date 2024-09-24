@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
@@ -48,7 +47,7 @@ type Channel struct {
 }
 
 func LoadFilterConfiguration(r io.Reader) (*FilterConfiguration, error) {
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -64,15 +63,15 @@ func LoadFilterConfiguration(r io.Reader) (*FilterConfiguration, error) {
 
 func (f *FilterConfiguration) Validate() error {
 	var errs []error
-	if f.APIVersion != "olm.operatorframework.io/v1alpha1" {
+	if f.APIVersion != FilterAPIVersion {
 		errs = append(errs, fmt.Errorf("unexpected API version %q", f.APIVersion))
 	}
-	if f.Kind != "FilterConfiguration" {
+	if f.Kind != FilterKind {
 		errs = append(errs, fmt.Errorf("unexpected kind %q", f.Kind))
 	}
-	if len(f.Packages) == 0 {
-		errs = append(errs, errors.New("at least one package must be specified"))
-	}
+	// if len(f.Packages) == 0 {
+	// 	errs = append(errs, errors.New("at least one package must be specified"))
+	// }
 	for i, pkg := range f.Packages {
 		if pkg.Name == "" {
 			errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: name must be specified", pkg.Name, i))
