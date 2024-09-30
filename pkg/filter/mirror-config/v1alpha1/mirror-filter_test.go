@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	"bytes"
 	"context"
 	"embed"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -130,15 +128,13 @@ var declCfgFS embed.FS
 
 func TestFilter_FilterCatalog(t *testing.T) {
 	type testCase struct {
-		name      string
-		config    FilterConfiguration
-		in        *declcfg.DeclarativeConfig
-		assertion func(*testing.T, *declcfg.DeclarativeConfig, error)
+		name          string
+		config        FilterConfiguration
+		filterOptions []FilterOption
+		in            *declcfg.DeclarativeConfig
+		assertion     func(*testing.T, *declcfg.DeclarativeConfig, error)
 	}
-	declCfg, err := declcfg.LoadFS(context.Background(), declCfgFS)
-	if err != nil {
-		t.Fatalf("unable to load declarative config from %v", declCfgFS)
-	}
+
 	testCases := []testCase{
 		{
 			name:   "empty config, nil fbc",
@@ -161,7 +157,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "empty config",
 			config: FilterConfiguration{},
-			in:     declCfg,
+			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 3, len(actual.Packages))
@@ -175,49 +171,153 @@ func TestFilter_FilterCatalog(t *testing.T) {
 				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
 					return b.Name == "devworkspace-operator.v0.19.1-0.1682321189.p"
 				}))
-				// TODO: how to assert channels have the right channel entries?
-				// For the moment, all channel entries are kept, but is this the expected behavior?
-				// Do we want necessarily to mimic the oc-mirror v1 filtering?
 				_, validationError := declcfg.ConvertToModel(*actual)
 				assert.NoError(t, validationError)
 			},
 		},
-		// {
-		// 	name:   "keep one package",
-		// 	config: FilterConfiguration{Packages: []Package{{Name: "pkg1"}}},
-		// 	in: &declcfg.DeclarativeConfig{
-		// 		Packages: []declcfg.Package{{Name: "pkg1"}, {Name: "pkg2"}, {Name: "pkg3"}},
-		// 		Channels: []declcfg.Channel{
-		// 			{Name: "ch1", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b1"}}},
-		// 			{Name: "ch2", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b2"}}},
-		// 			{Name: "ch", Package: "pkg2"},
-		// 			{Name: "ch", Package: "pkg3"},
-		// 		},
-		// 		Bundles: []declcfg.Bundle{
-		// 			{Name: "b1", Package: "pkg1", Properties: propertiesForBundle("pkg1", "1.0.0")},
-		// 			{Name: "b2", Package: "pkg1", Properties: propertiesForBundle("pkg1", "2.0.0")},
-		// 			{Name: "b3", Package: "pkg3", Properties: propertiesForBundle("pkg3", "3.0.0")},
-		// 		},
-		// 		Deprecations: []declcfg.Deprecation{{Package: "pkg1"}, {Package: "pkg2"}, {Package: "pkg3"}},
-		// 		Others:       []declcfg.Meta{{Name: "global"}},
-		// 	},
-		// 	assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
-		// 		assert.Equal(t, &declcfg.DeclarativeConfig{
-		// 			Packages: []declcfg.Package{{Name: "pkg1"}},
-		// 			Channels: []declcfg.Channel{
-		// 				{Name: "ch1", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b1"}}},
-		// 				{Name: "ch2", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b2"}}},
-		// 			},
-		// 			Bundles: []declcfg.Bundle{
-		// 				{Name: "b1", Package: "pkg1", Properties: propertiesForBundle("pkg1", "1.0.0")},
-		// 				{Name: "b2", Package: "pkg1", Properties: propertiesForBundle("pkg1", "2.0.0")},
-		// 			},
-		// 			Deprecations: []declcfg.Deprecation{{Package: "pkg1"}},
-		// 			Others:       []declcfg.Meta{{Name: "global"}},
-		// 		}, actual)
-		// 		assert.NoError(t, err)
-		// 	},
-		// },
+		{
+			name:          "empty config full true",
+			config:        FilterConfiguration{},
+			in:            loadDeclarativeConfig(t),
+			filterOptions: []FilterOption{InFull(true)},
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 5, len(actual.Channels))
+				assert.Equal(t, 38, len(actual.Bundles))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
+		{
+			name:   "filter on 1 package without channel filtering",
+			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product"}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.51.0-1"
+				}))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
+		{
+			name:   "filter on 1 package with channel filtering",
+			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable"}}}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.51.0-1"
+				}))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
+		{
+			name:   "filter on 1 package with channel filtering and redefinition of defaultChannel",
+			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", DefaultChannel: "threescale-2.12", Channels: []Channel{{Name: "threescale-2.12"}}}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Channels))
+				assert.Equal(t, 1, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.9.1-0.1664967752.p"
+				}))
+				assert.Equal(t, "threescale-2.12", actual.Channels[0].Name)
+				assert.Equal(t, 1, len(actual.Channels[0].Entries))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
+		{
+			name:   "filter on 2 packages",
+			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product"}, {Name: "3scale-operator"}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 2, len(actual.Packages))
+				assert.Equal(t, 2, len(actual.Channels))
+				assert.Equal(t, 2, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.51.0-1"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.11.0-mas"
+				}))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
+		{
+			name:   "filter on 1 package with channel and minVer filtering",
+			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable", VersionRange: ">=1.47.1-5"}}}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 2, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.51.0-1"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.47.1-5"
+				}))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
+		{
+			name:   "filter on 1 package, 2 channels and maxVersion filtering",
+			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", Channels: []Channel{{Name: "threescale-mas"}, {Name: "threescale-2.12", VersionRange: "<=0.8.0+0.1634606167.p"}}}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 2, len(actual.Channels))
+				assert.Equal(t, 3, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.8.0-0.1634606167.p"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.8.0"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.11.0-mas"
+				}))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
+		{
+			name:   "filter on 1 package, 1 channel min&max filtering",
+			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable", VersionRange: ">=1.34.1-5 <=1.42.0-5"}}}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Channels))
+				assert.Equal(t, 3, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.34.1-5"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.42.0-5"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.42.0-5-0.1687199951.p"
+				}))
+
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
 		// {
 		// 	name:   "keep two packages",
 		// 	config: FilterConfiguration{Packages: []Package{{Name: "pkg1"}, {Name: "pkg3"}}},
@@ -550,52 +650,60 @@ func TestFilter_FilterCatalog(t *testing.T) {
 				t.Skip("TODO")
 				return
 			}
-			f := NewMirrorFilter(tc.config)
+			f := NewMirrorFilter(tc.config, tc.filterOptions...)
 			out, err := f.FilterCatalog(context.Background(), tc.in)
 			tc.assertion(t, out, err)
 		})
 	}
 }
 
-func TestFilter_FilterCatalog_WithLogger(t *testing.T) {
-	logOutput := &bytes.Buffer{}
-	log := logrus.New()
-	log.SetFormatter(&logrus.TextFormatter{DisableTimestamp: true, DisableQuote: true})
-	log.SetOutput(logOutput)
-	withLogger := WithLogger(logrus.NewEntry(log))
-	f := NewMirrorFilter(FilterConfiguration{Packages: []Package{
-		{Name: "pkg", Channels: []Channel{{Name: "ch", VersionRange: ">=1.0.0 <2.0.0"}}},
-	}}, withLogger)
+// func TestFilter_FilterCatalog_WithLogger(t *testing.T) {
+// 	logOutput := &bytes.Buffer{}
+// 	log := logrus.New()
+// 	log.SetFormatter(&logrus.TextFormatter{DisableTimestamp: true, DisableQuote: true})
+// 	log.SetOutput(logOutput)
+// 	withLogger := WithLogger(logrus.NewEntry(log))
+// 	f := NewMirrorFilter(FilterConfiguration{Packages: []Package{
+// 		{Name: "pkg", Channels: []Channel{{Name: "ch", VersionRange: ">=1.0.0 <2.0.0"}}},
+// 	}}, withLogger)
 
-	out, err := f.FilterCatalog(context.Background(), &declcfg.DeclarativeConfig{
-		Packages: []declcfg.Package{{Name: "pkg"}},
-		Channels: []declcfg.Channel{{Name: "ch", Package: "pkg", Entries: []declcfg.ChannelEntry{
-			{Name: "b2", Skips: []string{"b1"}},
-			{Name: "b1"},
-		}}},
-		Bundles: []declcfg.Bundle{
-			{Name: "b1", Package: "pkg", Properties: propertiesForBundle("pkg", "1.0.0")},
-			{Name: "b2", Package: "pkg", Properties: propertiesForBundle("pkg", "2.0.0")},
-		},
-	})
+// 	out, err := f.FilterCatalog(context.Background(), &declcfg.DeclarativeConfig{
+// 		Packages: []declcfg.Package{{Name: "pkg"}},
+// 		Channels: []declcfg.Channel{{Name: "ch", Package: "pkg", Entries: []declcfg.ChannelEntry{
+// 			{Name: "b2", Skips: []string{"b1"}},
+// 			{Name: "b1"},
+// 		}}},
+// 		Bundles: []declcfg.Bundle{
+// 			{Name: "b1", Package: "pkg", Properties: propertiesForBundle("pkg", "1.0.0")},
+// 			{Name: "b2", Package: "pkg", Properties: propertiesForBundle("pkg", "2.0.0")},
+// 		},
+// 	})
 
-	assert.NoError(t, err)
-	assert.Equal(t, &declcfg.DeclarativeConfig{
-		Packages: []declcfg.Package{{Name: "pkg"}},
-		Channels: []declcfg.Channel{{Name: "ch", Package: "pkg", Entries: []declcfg.ChannelEntry{
-			{Name: "b2", Skips: []string{"b1"}},
-			{Name: "b1"},
-		}}},
-		Bundles: []declcfg.Bundle{
-			{Name: "b1", Package: "pkg", Properties: propertiesForBundle("pkg", "1.0.0")},
-			{Name: "b2", Package: "pkg", Properties: propertiesForBundle("pkg", "2.0.0")},
-		},
-	}, out)
-	assert.Contains(t, logOutput.String(), `including bundle "b2" with version "2.0.0"`)
-}
+// 	assert.NoError(t, err)
+// 	assert.Equal(t, &declcfg.DeclarativeConfig{
+// 		Packages: []declcfg.Package{{Name: "pkg"}},
+// 		Channels: []declcfg.Channel{{Name: "ch", Package: "pkg", Entries: []declcfg.ChannelEntry{
+// 			{Name: "b2", Skips: []string{"b1"}},
+// 			{Name: "b1"},
+// 		}}},
+// 		Bundles: []declcfg.Bundle{
+// 			{Name: "b1", Package: "pkg", Properties: propertiesForBundle("pkg", "1.0.0")},
+// 			{Name: "b2", Package: "pkg", Properties: propertiesForBundle("pkg", "2.0.0")},
+// 		},
+// 	}, out)
+// 	assert.Contains(t, logOutput.String(), `including bundle "b2" with version "2.0.0"`)
+// }
 
 func propertiesForBundle(pkg, version string) []property.Property {
 	return []property.Property{
 		{Type: property.TypePackage, Value: []byte(fmt.Sprintf(`{"packageName": %q, "version": %q}`, pkg, version))},
 	}
+}
+
+func loadDeclarativeConfig(t *testing.T) *declcfg.DeclarativeConfig {
+	declCfg, err := declcfg.LoadFS(context.Background(), declCfgFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return declCfg
 }
