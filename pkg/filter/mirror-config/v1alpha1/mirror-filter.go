@@ -81,7 +81,6 @@ func (f *mirrorFilter) filterByPackageAndChannels(fbc, filteredFBC *declcfg.Decl
 			filteredFBC.Packages = append(filteredFBC.Packages, pkg)
 		}
 	}
-
 	filteredFBC.Channels = []declcfg.Channel{}
 	for _, ch := range fbc.Channels {
 		chSet, foundPackage := f.chConfigs[ch.Package]
@@ -96,12 +95,17 @@ func (f *mirrorFilter) filterByPackageAndChannels(fbc, filteredFBC *declcfg.Decl
 			}
 		}
 	}
-
+	if len(filteredFBC.Channels) == 0 {
+		filteredFBC.Channels = nil
+	}
 	filteredFBC.Bundles = []declcfg.Bundle{}
 	for _, bdl := range fbc.Bundles {
 		if _, ok := f.chConfigs[bdl.Package]; ok {
 			filteredFBC.Bundles = append(filteredFBC.Bundles, bdl)
 		}
+	}
+	if len(filteredFBC.Bundles) == 0 {
+		filteredFBC.Bundles = nil
 	}
 	filteredFBC.Deprecations = []declcfg.Deprecation{}
 	for _, d := range fbc.Deprecations {
@@ -154,7 +158,7 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 		// that belong to the filtered packages
 		f.filterByPackageAndChannels(fbc, filteredFBC)
 		// for each package, set the default channel
-		index, err := indexFromDeclCfg(fbc)
+		index, err := indexFromDeclCfg(filteredFBC)
 		if err != nil {
 			return filteredFBC, err
 		}
@@ -164,7 +168,20 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				return nil, fmt.Errorf("invalid default channel configuration for package %q: %v", pkg.Name, err)
 			}
 			if f.opts.Full {
-				// all channels for this package should be kept
+				// all remaining channels for this package should be kept
+				// just make sure that remaining bundles correspond to channelEntries left
+				// and nothing else.
+				// get all entries remaining
+				keepEntries := sets.New[string]()
+				for _, ch := range filteredFBC.Channels {
+					for _, e := range ch.Entries {
+						keepEntries.Insert(e.Name)
+					}
+				}
+				// delete any bundles that aren´t in the remaining entries.
+				filteredFBC.Bundles = slices.DeleteFunc(filteredFBC.Bundles, func(b declcfg.Bundle) bool {
+					return !keepEntries.Has(b.Name)
+				})
 				return filteredFBC, nil
 			} else if f.pkgConfigs[pkg.Name].VersionRange != "" {
 				// TODO: in each channel, keep only bundles within range
@@ -265,7 +282,9 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 					}
 					ch.Entries = []declcfg.ChannelEntry{index.ChannelEntries[ch.Package][ch.Name][filteringChannel.head.Name]}
 					filteredFBC.Channels[ind] = ch
-					filteredFBC.Bundles = append(filteredFBC.Bundles, index.BundlesByPkgAndName[ch.Package][filteringChannel.head.Name])
+					if b, exists := index.BundlesByPkgAndName[ch.Package][filteringChannel.head.Name]; exists {
+						filteredFBC.Bundles = append(filteredFBC.Bundles, b)
+					}
 				}
 			}
 		}
