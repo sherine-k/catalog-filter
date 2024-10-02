@@ -1,8 +1,12 @@
 package v1alpha1
 
 import (
+	"encoding/json"
+	"fmt"
+
 	mmsemver "github.com/Masterminds/semver/v3"
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/property"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -23,6 +27,19 @@ type operatorIndex struct {
 	// This map allows quick access to the bundles based on the package and bundle name.
 	BundlesByPkgAndName        map[string]map[string]declcfg.Bundle
 	BundleVersionsByPkgAndName map[string]map[string]*mmsemver.Version
+}
+
+func newOperatorIndex() operatorIndex {
+	operatorConfig := operatorIndex{
+		Packages:                   make(map[string]declcfg.Package),
+		Channels:                   make(map[string][]declcfg.Channel),
+		ChannelNames:               make(map[string]sets.Set[string]),
+		ChannelEntries:             make(map[string]map[string]map[string]declcfg.ChannelEntry),
+		BundlesByPkgAndName:        make(map[string]map[string]declcfg.Bundle),
+		BundleVersionsByPkgAndName: make(map[string]map[string]*mmsemver.Version),
+	}
+
+	return operatorConfig
 }
 
 func indexFromDeclCfg(cfg *declcfg.DeclarativeConfig) (operatorIndex, error) {
@@ -72,4 +89,18 @@ func indexFromDeclCfg(cfg *declcfg.DeclarativeConfig) (operatorIndex, error) {
 	}
 
 	return index, nil
+}
+
+func getBundleVersion(b declcfg.Bundle) (*mmsemver.Version, error) {
+	for _, p := range b.Properties {
+		if p.Type != property.TypePackage {
+			continue
+		}
+		var pkg property.Package
+		if err := json.Unmarshal(p.Value, &pkg); err != nil {
+			return nil, err
+		}
+		return mmsemver.StrictNewVersion(pkg.Version)
+	}
+	return nil, fmt.Errorf("bundle %q in package %q has no package property", b.Name, b.Package)
 }

@@ -494,6 +494,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 					{Name: "ch1", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b1", Replaces: "b0"}}},
 					{Name: "ch2", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b3", Replaces: "b2"}}},
 				},
+				Bundles: []declcfg.Bundle{{Name: "b3", Package: "pkg1", Properties: propertiesForBundle("pkg1", "2.0.0")}, {Name: "b1", Package: "pkg1", Properties: propertiesForBundle("pkg1", "1.0.0")}},
 			},
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.Equal(t, &declcfg.DeclarativeConfig{
@@ -501,6 +502,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 					Channels: []declcfg.Channel{
 						{Name: "ch2", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b3", Replaces: "b2"}}},
 					},
+					Bundles: []declcfg.Bundle{{Name: "b3", Package: "pkg1", Properties: propertiesForBundle("pkg1", "2.0.0")}},
 				}, actual)
 				assert.NoError(t, err)
 			},
