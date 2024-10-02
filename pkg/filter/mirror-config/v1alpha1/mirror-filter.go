@@ -184,12 +184,55 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				})
 				return filteredFBC, nil
 			} else if f.pkgConfigs[pkg.Name].VersionRange != "" {
-				// TODO: in each channel, keep only bundles within range
+				// keep only the default channel
+				err := keepPackageDefaultChannel(filteredFBC, pkg, index)
+				if err != nil {
+					return nil, fmt.Errorf("unable to retain only default channel %s for package %s: %v", pkg.DefaultChannel, pkg.Name, err)
+				}
+				// in the default channel, keep only bundles within range
 				// unless breaking the graph
-				// keepBundles := map[string]sets.Set[string]{}
-				// for i, fbcCh := range filteredFBC.Channels {
-				// 	keepEntries := sets.New[string]()
-				// }
+				keepBundles := map[string]sets.Set[string]{}
+
+				for i, fbcCh := range filteredFBC.Channels {
+					keepEntries := sets.New[string]()
+					versionRange, err := mmsemver.NewConstraint(f.pkgConfigs[pkg.Name].VersionRange)
+					if err != nil {
+						return nil, fmt.Errorf("error parsing version range: %v", err)
+					}
+					ch, err := newChannel(fbcCh, f.opts.Log)
+					if err != nil {
+						return nil, err
+					}
+					keepEntries = ch.filterByVersionRange(versionRange, index.BundleVersionsByPkgAndName[fbcCh.Package])
+					if len(keepEntries) == 0 {
+						return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", fbcCh.Package, fbcCh.Name, f.pkgConfigs[pkg.Name].VersionRange)
+					}
+					filteredFBC.Channels[i].Entries = slices.DeleteFunc(filteredFBC.Channels[i].Entries, func(e declcfg.ChannelEntry) bool {
+						return !keepEntries.Has(e.Name)
+					})
+					if _, ok := keepBundles[fbcCh.Package]; !ok {
+						keepBundles[fbcCh.Package] = sets.New[string]()
+					}
+					keepBundles[fbcCh.Package] = keepBundles[fbcCh.Package].Union(keepEntries)
+				}
+				filteredFBC.Bundles = slices.DeleteFunc(filteredFBC.Bundles, func(b declcfg.Bundle) bool {
+					bundles, ok := keepBundles[b.Package]
+					return ok && !bundles.Has(b.Name)
+				})
+
+				for i := range filteredFBC.Deprecations {
+					filteredFBC.Deprecations[i].Entries = slices.DeleteFunc(filteredFBC.Deprecations[i].Entries, func(e declcfg.DeprecationEntry) bool {
+						if e.Reference.Schema == declcfg.SchemaBundle {
+							bundles, ok := keepBundles[filteredFBC.Deprecations[i].Package]
+							return ok && !bundles.Has(e.Reference.Name)
+						}
+						if e.Reference.Schema == declcfg.SchemaChannel {
+							channels, ok := index.ChannelNames[filteredFBC.Deprecations[i].Package]
+							return ok && !channels.Has(e.Reference.Name)
+						}
+						return false
+					})
+				}
 			} else if len(f.pkgConfigs[pkg.Name].Channels) > 0 {
 				// the work of keeping only the filtered channels
 				// was already done by filterByPackageAndChannels
@@ -259,19 +302,11 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 
 			} else {
 				// for each package, keep only the default channel
-				filteredFBC.Channels = []declcfg.Channel{}
 				filteredFBC.Bundles = []declcfg.Bundle{}
 				for _, pkg := range filteredFBC.Packages {
-					defaultChan := declcfg.Channel{
-						Name:    pkg.DefaultChannel,
-						Package: pkg.Name,
-					}
-					slices.SortFunc(index.Channels[pkg.Name], compareChannels)
-					channelIndex, exists := slices.BinarySearchFunc(index.Channels[pkg.Name], defaultChan, compareChannels)
-					if exists {
-						filteredFBC.Channels = append(filteredFBC.Channels, index.Channels[pkg.Name][channelIndex])
-					} else {
-						return nil, fmt.Errorf("default channel %s not found for package %s", pkg.DefaultChannel, pkg.Name)
+					err := keepPackageDefaultChannel(filteredFBC, pkg, index)
+					if err != nil {
+						return nil, fmt.Errorf("unable to retain only default channel %s for package %s: %v", pkg.DefaultChannel, pkg.Name, err)
 					}
 				}
 				// in each channel, keep only the head
@@ -366,6 +401,32 @@ func setDefaultChannel(pkg *declcfg.Package, pkgConfig Package, channels sets.Se
 	// If the original default channel does not exist after filtering, error
 	if !channels.Has(pkg.DefaultChannel) {
 		return fmt.Errorf("the default channel %q was filtered out, a new default channel must be configured for this package", pkg.DefaultChannel)
+	}
+	return nil
+}
+
+func keepPackageDefaultChannel(fbc *declcfg.DeclarativeConfig, pkg declcfg.Package, index operatorIndex) error {
+	defaultChan := declcfg.Channel{
+		Name:    pkg.DefaultChannel,
+		Package: pkg.Name,
+	}
+	slices.SortFunc(index.Channels[pkg.Name], compareChannels)
+	channelIndex, exists := slices.BinarySearchFunc(index.Channels[pkg.Name], defaultChan, compareChannels)
+	if exists {
+		if fbc.Channels == nil {
+			fbc.Channels = []declcfg.Channel{index.Channels[pkg.Name][channelIndex]}
+		} else if len(index.Channels[pkg.Name]) == 0 {
+			fbc.Channels = append(fbc.Channels, index.Channels[pkg.Name][channelIndex])
+		} else {
+			fbc.Channels = slices.DeleteFunc(fbc.Channels, func(ch declcfg.Channel) bool {
+				if ch.Package == pkg.Name {
+					return ch.Name != index.Channels[pkg.Name][channelIndex].Name
+				}
+				return false
+			})
+		}
+	} else {
+		return fmt.Errorf("default channel %s not found for package %s", pkg.DefaultChannel, pkg.Name)
 	}
 	return nil
 }

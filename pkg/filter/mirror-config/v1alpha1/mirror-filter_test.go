@@ -205,24 +205,24 @@ func TestFilter_FilterCatalog(t *testing.T) {
 				assert.NoError(t, validationError)
 			},
 		},
-		// {
-		// 	name:   "filter on 1 package with direct versionRange filtering",
-		// 	config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", VersionRange: ">=0.10.0-mas"}}},
-		// 	in:     loadDeclarativeConfig(t),
-		// 	assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
-		// 		assert.NoError(t, err)
-		// 		assert.Equal(t, 1, len(actual.Packages))
-		// 		assert.Equal(t, 2, len(actual.Bundles))
-		// 		assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
-		// 			return b.Name == "3scale-operator.v0.10.0-mas"
-		// 		}))
-		// 		assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
-		// 			return b.Name == "3scale-operator.v0.11.0-mas"
-		// 		}))
-		// 		_, validationError := declcfg.ConvertToModel(*actual)
-		// 		assert.NoError(t, validationError)
-		// 	},
-		// },
+		{
+			name:   "filter on 1 package with direct versionRange filtering",
+			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", VersionRange: ">=0.10.0-mas"}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 2, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.10.0-mas"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.11.0-mas"
+				}))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
 		{
 			name:   "filter on 1 package with channel filtering",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable"}}}}},
