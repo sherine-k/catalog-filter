@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/Masterminds/semver/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -69,16 +70,29 @@ func (f *FilterConfiguration) Validate() error {
 	if f.Kind != FilterKind {
 		errs = append(errs, fmt.Errorf("unexpected kind %q", f.Kind))
 	}
-	// if len(f.Packages) == 0 {
-	// 	errs = append(errs, errors.New("at least one package must be specified"))
-	// }
 	for i, pkg := range f.Packages {
 		if pkg.Name == "" {
 			errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: name must be specified", pkg.Name, i))
 		}
+
+		if pkg.VersionRange != "" {
+			_, err := semver.NewConstraint(pkg.VersionRange)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: versionRange is not in valid semantic versionning format: %v", pkg.Name, i, err))
+			}
+		}
 		for j, channel := range pkg.Channels {
 			if channel.Name == "" {
 				errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: channel %q at index [%d] is invalid: name must be specified", pkg.Name, i, channel.Name, j))
+			}
+			if channel.VersionRange != "" && pkg.VersionRange != "" {
+				errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: package specifies a VersionRange, while channel %q at index [%d] equally specifies one: package.VersionRange and channel.VersionRange are exclusive", pkg.Name, i, channel.Name, j))
+			}
+			if channel.VersionRange != "" {
+				_, err := semver.NewConstraint(channel.VersionRange)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: channel %q at index [%d] is invalid: versionRange is not in valid semantic versionning format: %v", pkg.Name, i, channel.Name, j, err))
+				}
 			}
 		}
 	}

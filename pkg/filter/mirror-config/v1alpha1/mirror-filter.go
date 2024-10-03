@@ -143,7 +143,7 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 			}
 			keepEntries = filteringChannel.filterByVersionRange(rangeConstraint, catalogIndex.BundleVersionsByPkgAndName[ch.Package])
 			if len(keepEntries) == 0 {
-				return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", ch.Package, ch.Name, f.pkgConfigs[ch.Name].VersionRange)
+				return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", ch.Package, ch.Name, versionRange)
 			}
 			filteredFBC.Channels[channelIndex].Entries = slices.DeleteFunc(filteredFBC.Channels[channelIndex].Entries, func(e declcfg.ChannelEntry) bool {
 				return !keepEntries.Has(e.Name)

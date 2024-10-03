@@ -22,3 +22,17 @@ packages:
         versionRange: ">=1.0.0 <2.0.0"
       - name: "baz-channel2"
         versionRange: ">=2.0.0 <3.0.0"
+  - name: "qux"
+    versionRange: ">=2.0.0 <3.0.0"
+    channels: 
+      - name: "stable"
+        versionRange: ">=1.0.0 <2.0.0"
+  - name: "quux"
+    versionRange: "not semver"
+    channels: 
+      - name: "stable"
+  - name: "quuux"
+    channels: 
+      - name: "stable"
+        versionRange: "not semver"
+
