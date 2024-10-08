@@ -144,6 +144,7 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				return true
 			})
 			// verify the filtered channel is still valid
+			// we probably want to remove a channel that is empty? but not sure.
 			_, err := newChannel(filteredFBC.Channels[channelIndex], f.opts.Log)
 			if err != nil {
 				return nil, fmt.Errorf("filtering on the selected bundles leads to invalidating channel %q for package %q: %v", ch.Name, ch.Package, err)

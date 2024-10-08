@@ -139,7 +139,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name:   "empty config, nil fbc",
+			name:   "WHEN empty config, nil fbc THEN Returns nil fbc",
 			config: FilterConfiguration{},
 			in:     nil,
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -148,7 +148,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "empty config, empty fbc",
+			name:   "WHEN empty config, empty fbc THEN Returns empty fbc",
 			config: FilterConfiguration{},
 			in:     &declcfg.DeclarativeConfig{},
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -157,7 +157,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "empty config",
+			name:   "WHEN empty config THEN Returns all packages with default channels and their heads",
 			config: FilterConfiguration{},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -178,7 +178,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:          "empty config full true",
+			name:          "WHEN empty config AND full:true THEN Returns input fbc",
 			config:        FilterConfiguration{},
 			in:            loadDeclarativeConfig(t),
 			filterOptions: []FilterOption{InFull(true)},
@@ -191,7 +191,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package without channel filtering",
+			name:   "WHEN filter on 1 package without channel filtering THEN Returns 1 package with its default channel and head bundle",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product"}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -206,7 +206,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package with direct versionRange filtering",
+			name:   "WHEN filter on 1 package with direct versionRange filtering THEN Returns that package with its default channel filtered by versionRange",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", VersionRange: ">=0.10.0-mas"}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -224,7 +224,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package with channel filtering",
+			name:   "WHEN filter on 1 package by channel no versionRange THEN Returns 1 package with specified channel and its head",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable"}}}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -239,7 +239,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:          "filter on 1 package, full, without channel filtering",
+			name:          "WHEN filter on 1 package, full, without channel filtering THEN Returns that package with all its channels and bundles",
 			config:        FilterConfiguration{Packages: []Package{{Name: "3scale-operator"}}},
 			filterOptions: []FilterOption{InFull(true)},
 			in:            loadDeclarativeConfig(t),
@@ -254,7 +254,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:          "filter on 1 package, full, with channel filtering",
+			name:          "WHEN filter on 1 package, full, with channel filtering THEN Returns that package with all bundles of filtered channels",
 			config:        FilterConfiguration{Packages: []Package{{Name: "3scale-operator", DefaultChannel: "threescale-2.11", Channels: []Channel{{Name: "threescale-2.11"}}}}},
 			filterOptions: []FilterOption{InFull(true)},
 			in:            loadDeclarativeConfig(t),
@@ -268,7 +268,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package with channel filtering and redefinition of defaultChannel",
+			name:   "WHEN filter on 1 package, channel filtering and defaultChannel THEN Returns that package with new defaultChannel and its head",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", DefaultChannel: "threescale-2.12", Channels: []Channel{{Name: "threescale-2.12"}}}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -286,7 +286,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 2 packages",
+			name:   "WHEN filter on 2 packages THEN Returns 2 packages, 2 channels and their resp. heads",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product"}, {Name: "3scale-operator"}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -305,7 +305,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package with channel and minVer filtering",
+			name:   "WHEN filter on 1 package with channel and minVer filtering THEN Returns 1 package, 1 channel and all bundles from min to head",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable", VersionRange: ">=1.47.1-5"}}}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -323,7 +323,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package, 2 channels and maxVersion filtering",
+			name:   "WHEN filter on 1 package, 2 channels (1 with maxVersion filtering) THEN Returns 1 package, 2 channels (1 head + all bundles till max)",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", Channels: []Channel{{Name: "threescale-mas"}, {Name: "threescale-2.12", VersionRange: "<=0.8.0+0.1634606167.p"}}}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -345,7 +345,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package, 1 channel min&max filtering",
+			name:   "WHEN filter on 1 package, 1 channel with versionRange THEN Returns 1 package, 1 channel, all bundles within range",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable", VersionRange: ">=1.34.1-5 <=1.42.0-5"}}}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -368,7 +368,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "filter on 1 package, bundle filtering",
+			name:   "WHEN filter on 1 package, bundle filtering THEN Returns 1 package all channels containing selected bundles",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", SelectedBundles: []SelectedBundle{{Name: "jaeger-operator.v1.34.1-5"}}}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
@@ -407,7 +407,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		// 	},
 		// },
 		{
-			name: "invalid version range",
+			name: "WHEN filter has invalid version range THEN Returns error",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1", Channels: []Channel{{Name: "ch1", VersionRange: "something-isnt-right"}}},
 			}},
@@ -423,7 +423,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid fbc channel",
+			name: "WHEN input FBC has invalid fbc channel THEN Returns error",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1", Channels: []Channel{{Name: "ch1", VersionRange: ">=1.0.0 <2.0.0"}}},
 			}},
@@ -441,7 +441,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "range excludes all channel entries",
+			name: "WHEN range excludes all channel entries THEN Returns error",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1", Channels: []Channel{{Name: "ch1", VersionRange: ">100.0.0"}}},
 			}},
@@ -459,7 +459,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "FBC default channel specified, configuration default channel unspecified, channel remains",
+			name: "WHEN filter 1 package default channel unspecified THEN Returns 1 package with default channel unchanged",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1"},
 			}},
@@ -482,7 +482,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "FBC default channel specified, configuration default channel unspecified, channel removed",
+			name: "WHEN filter 1 package by non-default channel AND new DefaultChannel unspecified THEN Returns error",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1", Channels: []Channel{{Name: "ch2"}}},
 			}},
@@ -500,7 +500,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "Configuration default channel specified, channel remains",
+			name: "WHEN filter 1 package by non-default channel AND new DefaultChannel specified THEN Returns 1 package 1 selected new default channel and 1 head",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1", DefaultChannel: "ch2", Channels: []Channel{{Name: "ch2"}}},
 			}},
@@ -524,7 +524,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "Configuration default channel specified, channel removed",
+			name: "WHEN filter 1 package by a channel AND that channel not configured as default THEN Returns error",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1", DefaultChannel: "ch2", Channels: []Channel{{Name: "ch1"}}},
 			}},
@@ -542,7 +542,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "deprecation entries are filtered",
+			name: "WHEN filter 1 package and 1 channel THEN Returns deprecation entries for remaining package, channel and bundles ONLY",
 			config: FilterConfiguration{Packages: []Package{{
 				Name:     "pkg1",
 				Channels: []Channel{{Name: "ch1"}},
