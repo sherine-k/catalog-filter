@@ -36,6 +36,8 @@ type Package struct {
 	// Channels is a list of channels to include in the filtered catalog.
 	// If not set, all channels will be included.
 	Channels []Channel `json:"channels,omitempty"`
+
+	SelectedBundles []SelectedBundle `json:"bundles,omitempty"`
 }
 
 type Channel struct {
@@ -45,6 +47,10 @@ type Channel struct {
 	// VersionRange is a semver range to filter the versions of the channel.
 	// If not set, all versions will be included.
 	VersionRange string `json:"versionRange,omitempty"`
+}
+
+type SelectedBundle struct {
+	Name string `json:"name" yaml:"name"`
 }
 
 func LoadFilterConfiguration(r io.Reader) (*FilterConfiguration, error) {
@@ -74,7 +80,9 @@ func (f *FilterConfiguration) Validate() error {
 		if pkg.Name == "" {
 			errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: name must be specified", pkg.Name, i))
 		}
-
+		if len(pkg.SelectedBundles) > 0 && (len(pkg.Channels) > 0 || pkg.VersionRange != "") {
+			errs = append(errs, fmt.Errorf("package %q at index [%d] is invalid: mixing both filtering by bundles and filtering by channels or versionRange is not allowed", pkg.Name, i))
+		}
 		if pkg.VersionRange != "" {
 			_, err := semver.NewConstraint(pkg.VersionRange)
 			if err != nil {

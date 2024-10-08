@@ -101,6 +101,7 @@ func TestLoadFilterConfiguration(t *testing.T) {
 				assert.ErrorContains(t, err, `package "quuux" at index [7] is invalid: channel "stable" at index [0] is invalid: versionRange is not in valid semantic versionning format: improper constraint: not semver`)
 				assert.ErrorContains(t, err, `package "quux" at index [6] is invalid: versionRange is not in valid semantic versionning format: improper constraint: not semver`)
 				assert.ErrorContains(t, err, `package "qux" at index [5] is invalid: package specifies a VersionRange, while channel "stable" at index [0] equally specifies one: package.VersionRange and channel.VersionRange are exclusive`)
+				assert.ErrorContains(t, err, `package "quuuux" at index [8] is invalid: mixing both filtering by bundles and filtering by channels or versionRange is not allowed`)
 			},
 		},
 		{

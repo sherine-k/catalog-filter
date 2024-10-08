@@ -35,4 +35,9 @@ packages:
     channels: 
       - name: "stable"
         versionRange: "not semver"
+  - name: "quuuux"
+    versionRange: ">=2.0.0 <3.0.0"
+    bundles: 
+    - name: "quuuux-v4.2.4-a"
+
 

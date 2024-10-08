@@ -103,7 +103,8 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 			}
 			// TODO: not sure the following line is necessary
 			filteredFBC.Packages[pkgIndex].DefaultChannel = pkg.DefaultChannel
-			if len(pkgConfig.Channels) == 0 && !f.opts.Full {
+
+			if (len(pkgConfig.Channels) == 0 && !f.opts.Full) && len(pkgConfig.SelectedBundles) == 0 {
 				if err = keepPackageDefaultChannel(filteredFBC, pkg, catalogIndex); err != nil {
 					return nil, fmt.Errorf("failure in filtering default channel for package %q: %v", pkg.Name, err)
 				}
@@ -122,16 +123,39 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 		if versionRange == "" && f.pkgConfigs[ch.Package].VersionRange != "" {
 			versionRange = f.pkgConfigs[ch.Package].VersionRange
 		}
-		if f.opts.Full && versionRange != "" {
+		switch {
+		case f.opts.Full && versionRange != "":
 			return nil, fmt.Errorf("Full: true cannot be mixed with versionRange")
-		} else if f.opts.Full {
+		case f.opts.Full && len(f.pkgConfigs[ch.Package].SelectedBundles) > 0:
+			return nil, fmt.Errorf("Full: true cannot be mixed with filtering by bundle selection")
+		case len(f.pkgConfigs[ch.Package].SelectedBundles) > 0 && versionRange != "":
+			return nil, fmt.Errorf("filtering by versionRange cannot be mixed with filtering by bundle selection")
+		case len(f.pkgConfigs[ch.Package].SelectedBundles) > 0:
+			if _, ok := keepBundles[ch.Package]; !ok {
+				keepBundles[ch.Package] = sets.New[string]()
+			}
+			keepBundles[ch.Package].Insert(bundleNames(f.pkgConfigs[ch.Package].SelectedBundles)...)
+			filteredFBC.Channels[channelIndex].Entries = slices.DeleteFunc(filteredFBC.Channels[channelIndex].Entries, func(e declcfg.ChannelEntry) bool {
+				for _, selectedEntry := range f.pkgConfigs[ch.Package].SelectedBundles {
+					if e.Name == selectedEntry.Name {
+						return false
+					}
+				}
+				return true
+			})
+			// verify the filtered channel is still valid
+			_, err := newChannel(filteredFBC.Channels[channelIndex], f.opts.Log)
+			if err != nil {
+				return nil, fmt.Errorf("filtering on the selected bundles leads to invalidating channel %q for package %q: %v", ch.Name, ch.Package, err)
+			}
+		case f.opts.Full:
 			for _, entry := range ch.Entries {
 				if _, ok := keepBundles[ch.Package]; !ok {
 					keepBundles[ch.Package] = sets.New[string]()
 				}
 				keepBundles[ch.Package].Insert(entry.Name)
 			}
-		} else if versionRange != "" {
+		case versionRange != "":
 			keepEntries := sets.New[string]()
 			rangeConstraint, err := mmsemver.NewConstraint(versionRange)
 			if err != nil {
@@ -152,7 +176,7 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				keepBundles[ch.Package] = sets.New[string]()
 			}
 			keepBundles[ch.Package] = keepBundles[ch.Package].Union(keepEntries)
-		} else {
+		default:
 			filteredChannel, chHead, err := f.filterChannelHead(ch, catalogIndex)
 			if err != nil {
 				return nil, fmt.Errorf("package %q channel %q unable to filter head of channel: %v", ch.Package, ch.Name, err)
@@ -342,4 +366,12 @@ func compareBundles(a, b declcfg.Bundle) int {
 	} else {
 		return strings.Compare(a.Name, b.Name)
 	}
+}
+
+func bundleNames(bundles []SelectedBundle) []string {
+	bundleNames := []string{}
+	for _, bundle := range bundles {
+		bundleNames = append(bundleNames, bundle.Name)
+	}
+	return bundleNames
 }

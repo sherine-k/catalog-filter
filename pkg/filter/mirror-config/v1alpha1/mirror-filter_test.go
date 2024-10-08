@@ -367,6 +367,22 @@ func TestFilter_FilterCatalog(t *testing.T) {
 				assert.NoError(t, validationError)
 			},
 		},
+		{
+			name:   "filter on 1 package, bundle filtering",
+			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", SelectedBundles: []SelectedBundle{{Name: "jaeger-operator.v1.34.1-5"}}}}},
+			in:     loadDeclarativeConfig(t),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Channels))
+				assert.Equal(t, 1, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "jaeger-operator.v1.34.1-5"
+				}))
+				_, validationError := declcfg.ConvertToModel(*actual)
+				assert.NoError(t, validationError)
+			},
+		},
 		// {
 		// 	name:   "filter on 3scale, 1 channel min&max filtering",
 		// 	config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", Channels: []Channel{{Name: "threescale-mas", VersionRange: ">=0.9.1 <=0.10.0-mas"}}}}},
