@@ -157,13 +157,19 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "WHEN empty config THEN Returns all packages with default channels and their heads",
+			name:   "WHEN empty config THEN Returns all packages with all channels and their heads",
 			config: FilterConfiguration{},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 3, len(actual.Packages))
-				assert.Equal(t, 3, len(actual.Bundles))
+				assert.Equal(t, 5, len(actual.Bundles))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.8.4-0.1655690146.p"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.9.1-0.1664967752.p"
+				}))
 				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
 					return b.Name == "3scale-operator.v0.11.0-mas"
 				}))
@@ -192,14 +198,20 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		},
 		{
 			name:   "WHEN filter on 1 package without channel filtering THEN Returns 1 package with its default channel and head bundle",
-			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product"}}},
+			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator"}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
-				assert.Equal(t, 1, len(actual.Bundles))
+				assert.Equal(t, 3, len(actual.Bundles))
 				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
-					return b.Name == "jaeger-operator.v1.51.0-1"
+					return b.Name == "3scale-operator.v0.8.4-0.1655690146.p"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.9.1-0.1664967752.p"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.11.0-mas"
 				}))
 				_, validationError := declcfg.ConvertToModel(*actual)
 				assert.NoError(t, validationError)
@@ -286,19 +298,25 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name:   "WHEN filter on 2 packages THEN Returns 2 packages, 2 channels and their resp. heads",
+			name:   "WHEN filter on 2 packages THEN Returns 2 packages, all their channels and their resp. heads",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product"}, {Name: "3scale-operator"}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 2, len(actual.Packages))
-				assert.Equal(t, 2, len(actual.Channels))
-				assert.Equal(t, 2, len(actual.Bundles))
+				assert.Equal(t, 4, len(actual.Channels))
+				assert.Equal(t, 4, len(actual.Bundles))
 				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
 					return b.Name == "jaeger-operator.v1.51.0-1"
 				}))
 				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
 					return b.Name == "3scale-operator.v0.11.0-mas"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.8.4-0.1655690146.p"
+				}))
+				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
+					return b.Name == "3scale-operator.v0.9.1-0.1664967752.p"
 				}))
 				_, validationError := declcfg.ConvertToModel(*actual)
 				assert.NoError(t, validationError)
@@ -441,12 +459,12 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			},
 		},
 		{
-			name: "WHEN range excludes all channel entries THEN Returns error",
+			name: "WHEN range excludes all channel entries from default channel THEN Returns error",
 			config: FilterConfiguration{Packages: []Package{
 				{Name: "pkg1", Channels: []Channel{{Name: "ch1", VersionRange: ">100.0.0"}}},
 			}},
 			in: &declcfg.DeclarativeConfig{
-				Packages: []declcfg.Package{{Name: "pkg1"}},
+				Packages: []declcfg.Package{{Name: "pkg1", DefaultChannel: "ch1"}},
 				Channels: []declcfg.Channel{{Name: "ch1", Package: "pkg1", Entries: []declcfg.ChannelEntry{
 					{Name: "b1", Replaces: "b0"},
 					{Name: "b0"},
@@ -475,6 +493,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 					Packages: []declcfg.Package{{Name: "pkg1", DefaultChannel: "ch1"}},
 					Channels: []declcfg.Channel{
 						{Name: "ch1", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b1", Replaces: "b0"}}},
+						{Name: "ch2", Package: "pkg1", Entries: []declcfg.ChannelEntry{{Name: "b3", Replaces: "b2"}}},
 					},
 					Bundles: []declcfg.Bundle{},
 				}, actual)
