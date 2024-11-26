@@ -7,7 +7,7 @@ require (
 	github.com/operator-framework/operator-registry v1.48.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	k8s.io/apimachinery v0.31.1
+	k8s.io/apimachinery v0.31.3
 	sigs.k8s.io/yaml v1.4.0
 )
 
