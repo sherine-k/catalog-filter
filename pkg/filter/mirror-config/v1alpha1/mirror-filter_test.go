@@ -387,15 +387,15 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		},
 		{
 			name:   "WHEN filter on 1 package, bundle filtering THEN Returns 1 package all channels containing selected bundles",
-			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", SelectedBundles: []SelectedBundle{{Name: "jaeger-operator.v1.34.1-5"}}}}},
+			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", SelectedBundles: []SelectedBundle{{Name: "3scale-operator.v0.9.1-0.1664967752.p"}}}}},
 			in:     loadDeclarativeConfig(t),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
-				assert.Equal(t, 1, len(actual.Channels))
+				assert.Equal(t, 2, len(actual.Channels))
 				assert.Equal(t, 1, len(actual.Bundles))
 				assert.True(t, slices.ContainsFunc(actual.Bundles, func(b declcfg.Bundle) bool {
-					return b.Name == "jaeger-operator.v1.34.1-5"
+					return b.Name == "3scale-operator.v0.9.1-0.1664967752.p"
 				}))
 				_, validationError := declcfg.ConvertToModel(*actual)
 				assert.NoError(t, validationError)

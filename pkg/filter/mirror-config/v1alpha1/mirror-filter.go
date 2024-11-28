@@ -134,11 +134,20 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				}
 				return true
 			})
-			// verify the filtered channel is still valid
-			// we probably want to remove a channel that is empty? but not sure.
-			_, err := newChannel(filteredFBC.Channels[channelIndex], f.opts.Log)
-			if err != nil {
-				return nil, fmt.Errorf("filtering on the selected bundles leads to invalidating channel %q for package %q: %v", ch.Name, ch.Package, err)
+			if len(filteredFBC.Channels[channelIndex].Entries) == 0 {
+				if ch.Name == catalogIndex.Packages[ch.Package].DefaultChannel {
+					return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", ch.Package, ch.Name, versionRange)
+				} else {
+					// mark the empty channel for removal from the list of channels
+					emptyChannels = append(emptyChannels, ch)
+				}
+			} else {
+				// verify the filtered channel is still valid
+				// we probably want to remove a channel that is empty? but not sure.
+				_, err := newChannel(filteredFBC.Channels[channelIndex], f.opts.Log)
+				if err != nil {
+					return nil, fmt.Errorf("filtering on the selected bundles leads to invalidating channel %q for package %q: %v", ch.Name, ch.Package, err)
+				}
 			}
 		case f.opts.Full:
 			for _, entry := range ch.Entries {
