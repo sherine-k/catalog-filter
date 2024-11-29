@@ -104,20 +104,11 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 			// TODO: not sure the following line is necessary
 			filteredFBC.Packages[pkgIndex].DefaultChannel = pkg.DefaultChannel
 
-			if (len(pkgConfig.Channels) == 0 && !f.opts.Full) && len(pkgConfig.SelectedBundles) == 0 {
-				if err = keepPackageDefaultChannel(filteredFBC, pkg, catalogIndex); err != nil {
-					return nil, fmt.Errorf("failure in filtering default channel for package %q: %v", pkg.Name, err)
-				}
-			} //len(pkgConfig.Channels) >0 : this is already covered by filterByPackageAndChannels
-		} else {
-			if !f.opts.Full {
-				if err = keepPackageDefaultChannel(filteredFBC, pkg, catalogIndex); err != nil {
-					return nil, fmt.Errorf("failure in filtering default channel for package %q: %v", pkg.Name, err)
-				}
-			} // if f.opts.Full, all channels need to remain, so no filtering needed here
 		}
 	}
 	keepBundles := map[string]sets.Set[string]{}
+	emptyChannels := []declcfg.Channel{}
+
 	for channelIndex, ch := range filteredFBC.Channels {
 		versionRange := f.chConfigs[ch.Package][ch.Name].VersionRange
 		if versionRange == "" && f.pkgConfigs[ch.Package].VersionRange != "" {
@@ -143,11 +134,20 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				}
 				return true
 			})
-			// verify the filtered channel is still valid
-			// we probably want to remove a channel that is empty? but not sure.
-			_, err := newChannel(filteredFBC.Channels[channelIndex], f.opts.Log)
-			if err != nil {
-				return nil, fmt.Errorf("filtering on the selected bundles leads to invalidating channel %q for package %q: %v", ch.Name, ch.Package, err)
+			if len(filteredFBC.Channels[channelIndex].Entries) == 0 {
+				if ch.Name == catalogIndex.Packages[ch.Package].DefaultChannel {
+					return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", ch.Package, ch.Name, versionRange)
+				} else {
+					// mark the empty channel for removal from the list of channels
+					emptyChannels = append(emptyChannels, ch)
+				}
+			} else {
+				// verify the filtered channel is still valid
+				// we probably want to remove a channel that is empty? but not sure.
+				_, err := newChannel(filteredFBC.Channels[channelIndex], f.opts.Log)
+				if err != nil {
+					return nil, fmt.Errorf("filtering on the selected bundles leads to invalidating channel %q for package %q: %v", ch.Name, ch.Package, err)
+				}
 			}
 		case f.opts.Full:
 			for _, entry := range ch.Entries {
@@ -168,7 +168,12 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 			}
 			keepEntries = filteringChannel.filterByVersionRange(rangeConstraint, catalogIndex.BundleVersionsByPkgAndName[ch.Package])
 			if len(keepEntries) == 0 {
-				return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", ch.Package, ch.Name, versionRange)
+				if ch.Name == catalogIndex.Packages[ch.Package].DefaultChannel {
+					return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", ch.Package, ch.Name, versionRange)
+				} else {
+					// mark the empty channel for removal from the list of channels
+					emptyChannels = append(emptyChannels, ch)
+				}
 			}
 			filteredFBC.Channels[channelIndex].Entries = slices.DeleteFunc(filteredFBC.Channels[channelIndex].Entries, func(e declcfg.ChannelEntry) bool {
 				return !keepEntries.Has(e.Name)
@@ -189,6 +194,14 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 			keepBundles[ch.Package] = keepBundles[ch.Package].Insert(chHead)
 		}
 	}
+
+	// empty channels should be removed
+	filteredFBC.Channels = slices.DeleteFunc(filteredFBC.Channels, func(chanInStudy declcfg.Channel) bool {
+		return slices.ContainsFunc(emptyChannels, func(anEmptyChan declcfg.Channel) bool {
+			return chanInStudy.Name == anEmptyChan.Name && chanInStudy.Package == anEmptyChan.Package
+		})
+	})
+
 	if len(keepBundles) > 0 {
 		filteredFBC.Bundles = []declcfg.Bundle{}
 		for pkg, bundles := range keepBundles {
