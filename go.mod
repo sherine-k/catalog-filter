@@ -3,7 +3,7 @@ module github.com/sherine-k/catalog-filter
 go 1.22.5
 
 require (
-	github.com/Masterminds/semver/v3 v3.3.0
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/operator-framework/operator-registry v1.47.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
