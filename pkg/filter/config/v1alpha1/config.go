@@ -41,6 +41,12 @@ type Channel struct {
 	// VersionRange is a semver range to filter the versions of the channel.
 	// If not set, all versions will be included.
 	VersionRange string `json:"versionRange,omitempty"`
+
+	// MinimizeSelection allows channel filtering to remove bundles at the
+	// root of the replaces chain. Using this option minimizes the selection
+	// but can cause metadata that sometimes exists only on the channel head
+	// to be removed.
+	MinimizeSelection bool `json:"minimizeSelection,omitempty"`
 }
 
 func LoadFilterConfiguration(r io.Reader) (*FilterConfiguration, error) {
