@@ -122,20 +122,31 @@ func newChannel(ch declcfg.Channel, log *logrus.Entry) (*channel, error) {
 
 	// Topological sort the channel. If we can successfully perform a topological
 	// sort, then we know there are no cycles.
-	sorted := make([]string, 0, len(ch.Entries))
 	queue := []*channelEntry{heads[0]}
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
-		sorted = append(sorted, cur.Name)
 		if cur.Replaces != nil {
-			incoming[cur.Replaces.Name].Delete(cur)
-			if incoming[cur.Replaces.Name].Len() == 0 {
-				delete(incoming, cur.Replaces.Name)
-				queue = append(queue, cur.Replaces)
+			// If a channelEntry is both in the `Replaces` and `Skips` list of
+			// `cur`, it will be removed from the `incoming` map in the
+			// one of the 2 checks. However because Golang maps return 0-value
+			// for non-existent keys, we need to explicitely check the entry
+			// has not been already removed before we add it to the queue. If
+			// we don't, the queue will end up with many duplicates of the same
+			// entry. For channels with many entries and long skip/replaces
+			// chains, this can even cause OOM.
+			if _, ok := incoming[cur.Replaces.Name]; ok {
+				incoming[cur.Replaces.Name].Delete(cur)
+				if incoming[cur.Replaces.Name].Len() == 0 {
+					delete(incoming, cur.Replaces.Name)
+					queue = append(queue, cur.Replaces)
+				}
 			}
 		}
 		for _, n := range cur.Skips.UnsortedList() {
+			if _, ok := incoming[n.Name]; !ok {
+				continue
+			}
 			incoming[n.Name].Delete(cur)
 			if incoming[n.Name].Len() == 0 {
 				delete(incoming, n.Name)
