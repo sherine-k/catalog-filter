@@ -128,6 +128,9 @@ func TestFilter_KeepMeta(t *testing.T) {
 //go:embed testdata/declarative_configs
 var declCfgFS embed.FS
 
+//go:embed testdata/community-catalog
+var communityCtlgFS embed.FS
+
 func TestFilter_FilterCatalog(t *testing.T) {
 	type testCase struct {
 		name          string
@@ -159,7 +162,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN empty config THEN Returns all packages with all channels and their heads",
 			config: FilterConfiguration{},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 3, len(actual.Packages))
@@ -186,7 +189,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:          "WHEN empty config AND full:true THEN Returns input fbc",
 			config:        FilterConfiguration{},
-			in:            loadDeclarativeConfig(t),
+			in:            loadDeclarativeConfig(t, declCfgFS),
 			filterOptions: []FilterOption{InFull(true)},
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
@@ -199,7 +202,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package without channel filtering THEN Returns 1 package with its default channel and head bundle",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator"}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -220,7 +223,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package with direct versionRange filtering THEN Returns that package with its default channel filtered by versionRange",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", VersionRange: ">=0.10.0-mas"}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -238,7 +241,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package by channel no versionRange THEN Returns 1 package with specified channel and its head",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable"}}}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -254,7 +257,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			name:          "WHEN filter on 1 package, full, without channel filtering THEN Returns that package with all its channels and bundles",
 			config:        FilterConfiguration{Packages: []Package{{Name: "3scale-operator"}}},
 			filterOptions: []FilterOption{InFull(true)},
-			in:            loadDeclarativeConfig(t),
+			in:            loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -269,7 +272,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 			name:          "WHEN filter on 1 package, full, with channel filtering THEN Returns that package with all bundles of filtered channels",
 			config:        FilterConfiguration{Packages: []Package{{Name: "3scale-operator", DefaultChannel: "threescale-2.11", Channels: []Channel{{Name: "threescale-2.11"}}}}},
 			filterOptions: []FilterOption{InFull(true)},
-			in:            loadDeclarativeConfig(t),
+			in:            loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -282,7 +285,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package, channel filtering and defaultChannel THEN Returns that package with new defaultChannel and its head",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", DefaultChannel: "threescale-2.12", Channels: []Channel{{Name: "threescale-2.12"}}}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -300,7 +303,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 2 packages THEN Returns 2 packages, all their channels and their resp. heads",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product"}, {Name: "3scale-operator"}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 2, len(actual.Packages))
@@ -325,7 +328,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package with channel and minVer filtering THEN Returns 1 package, 1 channel and all bundles from min to head",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable", VersionRange: ">=1.47.1-5"}}}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -343,7 +346,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package, 2 channels (1 with maxVersion filtering) THEN Returns 1 package, 2 channels (1 head + all bundles till max)",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", Channels: []Channel{{Name: "threescale-mas"}, {Name: "threescale-2.12", VersionRange: "<=0.8.0+0.1634606167.p"}}}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -365,7 +368,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package, 1 channel with versionRange THEN Returns 1 package, 1 channel, all bundles within range",
 			config: FilterConfiguration{Packages: []Package{{Name: "jaeger-product", Channels: []Channel{{Name: "stable", VersionRange: ">=1.34.1-5 <=1.42.0-5"}}}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -388,7 +391,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		{
 			name:   "WHEN filter on 1 package, bundle filtering THEN Returns 1 package all channels containing selected bundles",
 			config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", SelectedBundles: []SelectedBundle{{Name: "3scale-operator.v0.9.1-0.1664967752.p"}}}}},
-			in:     loadDeclarativeConfig(t),
+			in:     loadDeclarativeConfig(t, declCfgFS),
 			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 				assert.NoError(t, err)
 				assert.Equal(t, 1, len(actual.Packages))
@@ -404,7 +407,7 @@ func TestFilter_FilterCatalog(t *testing.T) {
 		// {
 		// 	name:   "filter on 3scale, 1 channel min&max filtering",
 		// 	config: FilterConfiguration{Packages: []Package{{Name: "3scale-operator", Channels: []Channel{{Name: "threescale-mas", VersionRange: ">=0.9.1 <=0.10.0-mas"}}}}},
-		// 	in:     loadDeclarativeConfig(t),
+		// 	in:     loadDeclarativeConfig(t, declCfgFS),
 		// 	assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
 		// 		assert.NoError(t, err)
 		// 		assert.Equal(t, 1, len(actual.Packages))
@@ -616,6 +619,19 @@ func TestFilter_FilterCatalog(t *testing.T) {
 				assert.NoError(t, err)
 			},
 		},
+		{
+			name: "WHEN filter 1 package AND default channel is overloaded THEN should not timeout",
+			config: FilterConfiguration{Packages: []Package{{
+				Name: "assisted-service-operator",
+			}}},
+			in: loadDeclarativeConfig(t, communityCtlgFS),
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Channels[0].Entries))
+				assert.Equal(t, "assisted-service-operator.v0.7.74", actual.Channels[0].Entries[0].Name)
+				assert.NoError(t, err)
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -673,8 +689,8 @@ func propertiesForBundle(pkg, version string) []property.Property {
 	}
 }
 
-func loadDeclarativeConfig(t *testing.T) *declcfg.DeclarativeConfig {
-	declCfg, err := declcfg.LoadFS(context.Background(), declCfgFS)
+func loadDeclarativeConfig(t *testing.T, fs embed.FS) *declcfg.DeclarativeConfig {
+	declCfg, err := declcfg.LoadFS(context.Background(), fs)
 	if err != nil {
 		t.Fatal(err)
 	}
