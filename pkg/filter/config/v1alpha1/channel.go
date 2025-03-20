@@ -180,7 +180,7 @@ func newChannel(ch declcfg.Channel, log *logrus.Entry) (*channel, error) {
 //     of version range matches at or below them, we will use the bundle lowest in the replaces chain.
 //   - The tail will be the first bundle in the replaces chain whose version range match count is 0. The tail is not
 //     included in the new chain.
-func (c *channel) filterByVersionRange(versionRange *mmsemver.Constraints, versionMap map[string]*mmsemver.Version) sets.Set[string] {
+func (c *channel) filterByVersionRange(versionRange *mmsemver.Constraints, versionMap map[string]*mmsemver.Version, minimizeSelection bool) sets.Set[string] {
 	keepEntries := sets.New[string]()
 
 	for cur := c.head; cur != nil; cur = cur.Replaces {
@@ -200,10 +200,13 @@ func (c *channel) filterByVersionRange(versionRange *mmsemver.Constraints, versi
 	//   count of unvisited tail nodes in the version range)
 	// - tail (highest node on the replaces chain that has 0 unvisited tail
 	//   nodes in the version range)
-	var head, tail *channelEntry
+	var (
+		head = c.head
+		tail *channelEntry
+	)
 	for cur := c.head; cur != nil; cur = cur.Replaces {
 		count := counts[cur.Name]
-		if count >= maxCount {
+		if minimizeSelection && count >= maxCount {
 			head = cur
 			maxCount = count
 		}
@@ -215,11 +218,15 @@ func (c *channel) filterByVersionRange(versionRange *mmsemver.Constraints, versi
 
 	// We how have head and tail, let's traverse head to tail and build a list of bundles to keep,
 	// emitting a warning if anything in the replaces chain is not in the version range.
+	keepReason := "is required to ensure inclusion of all bundles in the range"
+	if !minimizeSelection {
+		keepReason = "is included to preserve replaces chain from head"
+	}
 	for cur := head; cur != tail; cur = cur.Replaces {
 		if cur.Version == nil {
-			c.log.Warnf("including bundle %q: it is unversioned but is required to ensure inclusion of all bundles in the range", cur.Name)
+			c.log.Warnf("including bundle %q: it is unversioned but %s", cur.Name, keepReason)
 		} else if !versionRange.Check(cur.Version) {
-			c.log.Warnf("including bundle %q with version %q: it falls outside the specified range of %q but is required to ensure inclusion of all bundles in the range", cur.Name, cur.Version, versionRange)
+			c.log.Warnf("including bundle %q with version %q: it falls outside the specified range of %q but %s", cur.Name, cur.Version, versionRange, keepReason)
 		}
 		keepEntries.Insert(cur.Name)
 		for _, skip := range cur.Skips.UnsortedList() {
