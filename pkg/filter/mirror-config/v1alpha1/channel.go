@@ -255,5 +255,4 @@ func countUniqueTailBundlesInRange(entry *channelEntry, versionConstraints *mmse
 	}
 
 	counts[entry.Name] = count
-	return
 }

@@ -632,6 +632,126 @@ func TestFilter_FilterCatalog(t *testing.T) {
 				assert.NoError(t, err)
 			},
 		},
+		{
+			name: "WHEN filter with exact version match (min equals max) THEN Returns only the exact version bundle",
+			config: FilterConfiguration{Packages: []Package{
+				{Name: "rhbk-operator", Channels: []Channel{{Name: "stable-v26", VersionRange: ">=26.0.8-opr.1 <=26.0.8-opr.1"}}},
+			}},
+			in: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{{Name: "rhbk-operator", DefaultChannel: "stable-v26"}},
+				Channels: []declcfg.Channel{{
+					Name: "stable-v26", Package: "rhbk-operator",
+					Entries: []declcfg.ChannelEntry{
+						{Name: "rhbk-operator.v26.0.9", Replaces: "rhbk-operator.v26.0.8"},
+						{Name: "rhbk-operator.v26.0.8", Replaces: "rhbk-operator.v26.0.7"},
+						{Name: "rhbk-operator.v26.0.7", Replaces: "rhbk-operator.v26.0.6"},
+						{Name: "rhbk-operator.v26.0.6"},
+					},
+				}},
+				Bundles: []declcfg.Bundle{
+					{Name: "rhbk-operator.v26.0.9", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.9-opr.1")},
+					{Name: "rhbk-operator.v26.0.8", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.8-opr.1")},
+					{Name: "rhbk-operator.v26.0.7", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.7-opr.1")},
+					{Name: "rhbk-operator.v26.0.6", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.6-opr.1")},
+				},
+			},
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Channels))
+				assert.Equal(t, 1, len(actual.Bundles))
+				assert.Equal(t, "rhbk-operator.v26.0.8", actual.Bundles[0].Name)
+			},
+		},
+		{
+			name: "WHEN filter with exact version match and skips THEN Returns only the exact version from skips",
+			config: FilterConfiguration{Packages: []Package{
+				{Name: "rhbk-operator", Channels: []Channel{{Name: "stable-v26", VersionRange: ">=26.0.8-opr.1 <=26.0.8-opr.1"}}},
+			}},
+			in: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{{Name: "rhbk-operator", DefaultChannel: "stable-v26"}},
+				Channels: []declcfg.Channel{{
+					Name: "stable-v26", Package: "rhbk-operator",
+					Entries: []declcfg.ChannelEntry{
+						{Name: "rhbk-operator.v26.0.9", Replaces: "rhbk-operator.v26.0.6", Skips: []string{"rhbk-operator.v26.0.8", "rhbk-operator.v26.0.7"}},
+						{Name: "rhbk-operator.v26.0.8"},
+						{Name: "rhbk-operator.v26.0.7"},
+						{Name: "rhbk-operator.v26.0.6"},
+					},
+				}},
+				Bundles: []declcfg.Bundle{
+					{Name: "rhbk-operator.v26.0.9", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.9-opr.1")},
+					{Name: "rhbk-operator.v26.0.8", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.8-opr.1")},
+					{Name: "rhbk-operator.v26.0.7", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.7-opr.1")},
+					{Name: "rhbk-operator.v26.0.6", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.6-opr.1")},
+				},
+			},
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Channels))
+				assert.Equal(t, 1, len(actual.Bundles))
+				assert.Equal(t, "rhbk-operator.v26.0.8", actual.Bundles[0].Name)
+			},
+		},
+		{
+			name: "WHEN filter with exact version and complex skip chain THEN Returns only exact version",
+			config: FilterConfiguration{Packages: []Package{
+				{Name: "rhbk-operator", Channels: []Channel{{Name: "stable-v26", VersionRange: ">=26.0.8-opr.1 <=26.0.8-opr.1"}}},
+			}},
+			in: &declcfg.DeclarativeConfig{
+				Packages: []declcfg.Package{{Name: "rhbk-operator", DefaultChannel: "stable-v26"}},
+				Channels: []declcfg.Channel{{
+					Name: "stable-v26", Package: "rhbk-operator",
+					Entries: []declcfg.ChannelEntry{
+						{
+							Name:     "rhbk-operator.v26.0.17",
+							Replaces: "rhbk-operator.v26.0.15",
+							Skips:    []string{"rhbk-operator.v26.0.16"},
+						},
+						{Name: "rhbk-operator.v26.0.16"},
+						{
+							Name: "rhbk-operator.v26.0.15",
+							Skips: []string{
+								"rhbk-operator.v26.0.14", "rhbk-operator.v26.0.13", "rhbk-operator.v26.0.12",
+								"rhbk-operator.v26.0.11", "rhbk-operator.v26.0.10", "rhbk-operator.v26.0.9",
+								"rhbk-operator.v26.0.8", "rhbk-operator.v26.0.7", "rhbk-operator.v26.0.6",
+							},
+						},
+						{Name: "rhbk-operator.v26.0.14"},
+						{Name: "rhbk-operator.v26.0.13"},
+						{Name: "rhbk-operator.v26.0.12"},
+						{Name: "rhbk-operator.v26.0.11"},
+						{Name: "rhbk-operator.v26.0.10"},
+						{Name: "rhbk-operator.v26.0.9"},
+						{Name: "rhbk-operator.v26.0.8"},
+						{Name: "rhbk-operator.v26.0.7"},
+						{Name: "rhbk-operator.v26.0.6"},
+					},
+				}},
+				Bundles: []declcfg.Bundle{
+					{Name: "rhbk-operator.v26.0.17", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.17-opr.1")},
+					{Name: "rhbk-operator.v26.0.16", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.16-opr.1")},
+					{Name: "rhbk-operator.v26.0.15", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.15-opr.1")},
+					{Name: "rhbk-operator.v26.0.14", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.14-opr.1")},
+					{Name: "rhbk-operator.v26.0.13", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.13-opr.1")},
+					{Name: "rhbk-operator.v26.0.12", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.12-opr.1")},
+					{Name: "rhbk-operator.v26.0.11", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.11-opr.1")},
+					{Name: "rhbk-operator.v26.0.10", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.10-opr.1")},
+					{Name: "rhbk-operator.v26.0.9", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.9-opr.1")},
+					{Name: "rhbk-operator.v26.0.8", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.8-opr.1")},
+					{Name: "rhbk-operator.v26.0.7", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.7-opr.1")},
+					{Name: "rhbk-operator.v26.0.6", Package: "rhbk-operator", Properties: propertiesForBundle("rhbk-operator", "26.0.6-opr.1")},
+				},
+			},
+			assertion: func(t *testing.T, actual *declcfg.DeclarativeConfig, err error) {
+				assert.NoError(t, err)
+				assert.Equal(t, 1, len(actual.Packages))
+				assert.Equal(t, 1, len(actual.Channels))
+				assert.Equal(t, 1, len(actual.Bundles))
+				assert.Equal(t, "rhbk-operator.v26.0.8", actual.Bundles[0].Name)
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -695,4 +815,52 @@ func loadDeclarativeConfig(t *testing.T, fs embed.FS) *declcfg.DeclarativeConfig
 		t.Fatal(err)
 	}
 	return declCfg
+}
+
+func TestIsSpecificVersion(t *testing.T) {
+	type testCase struct {
+		name            string
+		versionRange    string
+		expectedIsExact bool
+		expectedVersion string
+	}
+	testCases := []testCase{
+		{
+			name:            "exact version - min equals max",
+			versionRange:    ">=26.0.8-opr.1 <=26.0.8-opr.1",
+			expectedIsExact: true,
+			expectedVersion: "26.0.8-opr.1",
+		},
+		{
+			name:            "exact version with different format",
+			versionRange:    ">=1.2.3 <=1.2.3",
+			expectedIsExact: true,
+			expectedVersion: "1.2.3",
+		},
+		{
+			name:            "range - min less than max",
+			versionRange:    ">=1.0.0 <2.0.0",
+			expectedIsExact: false,
+			expectedVersion: "",
+		},
+		{
+			name:            "single constraint",
+			versionRange:    ">=1.0.0",
+			expectedIsExact: false,
+			expectedVersion: "",
+		},
+		{
+			name:            "complex prerelease version - equal",
+			versionRange:    ">=1.2.3-alpha.1+build.123 <=1.2.3-alpha.1+build.123",
+			expectedIsExact: true,
+			expectedVersion: "1.2.3-alpha.1+build.123",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			isExact, version := isSpecificVersion(tc.versionRange)
+			assert.Equal(t, tc.expectedIsExact, isExact, "version range: %s", tc.versionRange)
+			assert.Equal(t, tc.expectedVersion, version, "version range: %s", tc.versionRange)
+		})
+	}
 }
