@@ -163,6 +163,10 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				return nil, fmt.Errorf("error parsing version range: %v", err)
 			}
 
+			/*OCPBUGS-61497:
+			isSpecificVersion and specificBundle were implemented to fix a bug where if a user specified the min
+			and max version with the same version, more than one version was returned.
+			This fix this behavior returning only the requested version.*/
 			if isSpecificVer, specificVersion := isSpecificVersion(versionRange); isSpecificVer {
 				ver, err := specificBundle(specificVersion, catalogIndex.BundleVersionsByPkgAndName[ch.Package])
 				if err != nil {
@@ -403,9 +407,7 @@ func bundleNames(bundles []SelectedBundle) []string {
 // isSpecificVersion checks if a version range represents a specific version match
 // (i.e., min version == max version). This is true for version ranges like ">=26.0.8-opr.1 <=26.0.8-opr.1".
 func isSpecificVersion(versionRange string) (bool, string) {
-	parts := strings.Fields(versionRange)
-
-	if len(parts) == 2 {
+	if parts := strings.Fields(versionRange); len(parts) == 2 {
 		minVer := strings.TrimPrefix(parts[0], ">=")
 		maxVer := strings.TrimPrefix(parts[1], "<=")
 
@@ -419,14 +421,16 @@ func isSpecificVersion(versionRange string) (bool, string) {
 
 // specificBundle finds the bundle with the specific version in the bundles map and returns the bundle name
 func specificBundle(specificVersion string, bundles map[string]*mmsemver.Version) (string, error) {
+	specificSemVer, err := mmsemver.NewVersion(specificVersion)
+	if err != nil {
+		return "", fmt.Errorf("error parsing specific version: %w", err)
+	}
+
 	for bundle, bundleVersion := range bundles {
-		specificVersion, err := mmsemver.NewVersion(specificVersion)
-		if err != nil {
-			return "", fmt.Errorf("error parsing specific version: %w", err)
-		}
-		if bundleVersion.Equal(specificVersion) {
+		if bundleVersion.Equal(specificSemVer) {
 			return bundle, nil
 		}
 	}
+
 	return "", fmt.Errorf("specific version %s not found in bundles", specificVersion)
 }
