@@ -269,12 +269,13 @@ func channelEntrySetToNames(s sets.Set[*channelEntry]) sets.Set[string] {
 
 func TestChannel_FilterByVersionRange(t *testing.T) {
 	type testCase struct {
-		name             string
-		in               declcfg.Channel
-		versionRange     string
-		versionMap       map[string]*mmsemver.Version
-		expected         []string
-		expectedWarnings []string
+		name              string
+		in                declcfg.Channel
+		versionRange      string
+		versionMap        map[string]*mmsemver.Version
+		minimizeSelection bool
+		expected          []string
+		expectedWarnings  []string
 	}
 	testCases := []testCase{
 		{
@@ -286,7 +287,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 			versionMap: map[string]*mmsemver.Version{
 				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
 			},
-			expected: []string{"foo.v1.0.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.0.0"},
 		},
 		{
 			name: "single entry, out of range",
@@ -297,7 +299,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 			versionMap: map[string]*mmsemver.Version{
 				"foo.v2.0.0": mmsemver.MustParse("2.0.0"),
 			},
-			expected: []string{},
+			minimizeSelection: true,
+			expected:          []string{},
 		},
 		{
 			name: "include head, but not tail",
@@ -312,7 +315,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
 				"foo.v0.1.0": mmsemver.MustParse("0.1.0"),
 			},
-			expected: []string{"foo.v1.0.0", "foo.v1.1.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.0.0", "foo.v1.1.0"},
 		},
 		{
 			name: "include tail, but not head",
@@ -327,7 +331,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.1.0": mmsemver.MustParse("1.1.0"),
 				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
 			},
-			expected: []string{"foo.v1.0.0", "foo.v1.1.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.0.0", "foo.v1.1.0"},
 		},
 		{
 			name: "neither head nor tail",
@@ -344,7 +349,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
 				"foo.v0.1.0": mmsemver.MustParse("0.1.0"),
 			},
-			expected: []string{"foo.v1.0.0", "foo.v1.1.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.0.0", "foo.v1.1.0"},
 		},
 		{
 			// This case is definitely possible in practice, but produces a surprising result. The algorithm does not
@@ -365,7 +371,11 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v2.0.0": mmsemver.MustParse("2.0.0"),
 				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
 			},
-			expected: []string{"foo.v1.0.0", "foo.v2.0.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.0.0", "foo.v2.0.0"},
+			expectedWarnings: []string{
+				`including bundle "foo.v2.0.0" with version "2.0.0": it falls outside the specified range of ">=1.0.0 <2.0.0" but is required to ensure inclusion of all bundles in the range`,
+			},
 		},
 		{
 			name: "include head outside of range",
@@ -380,7 +390,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.1.1": mmsemver.MustParse("1.1.1"),
 				"foo.v1.1.0": mmsemver.MustParse("1.1.0"),
 			},
-			expected: []string{"foo.v1.1.0", "foo.v1.1.1", "foo.v2.0.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.1.0", "foo.v1.1.1", "foo.v2.0.0"},
 			expectedWarnings: []string{
 				`including bundle "foo.v2.0.0" with version "2.0.0": it falls outside the specified range of ">=1.0.0 <2.0.0" but is required to ensure inclusion of all bundles in the range`,
 			},
@@ -400,7 +411,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
 				"foo.v0.1.0": mmsemver.MustParse("0.1.0"),
 			},
-			expected: []string{"foo.v1.0.0", "foo.v1.1.0", "foo.v2.0.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.0.0", "foo.v1.1.0", "foo.v2.0.0"},
 			expectedWarnings: []string{
 				`including bundle "foo.v2.0.0" with version "2.0.0": it falls outside the specified range of ">=1.0.0 <2.0.0" but is required to ensure inclusion of all bundles in the range`,
 			},
@@ -417,7 +429,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.1.1": mmsemver.MustParse("1.1.1"),
 				"foo.v1.1.0": mmsemver.MustParse("1.1.0"),
 			},
-			expected: []string{"foo.v1.1.0", "foo.v1.1.1", "foo.v2.0.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.1.0", "foo.v1.1.1", "foo.v2.0.0"},
 			expectedWarnings: []string{
 				`including bundle "foo.v2.0.0": it is unversioned but is required to ensure inclusion of all bundles in the range`,
 			},
@@ -437,7 +450,8 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.1.1": mmsemver.MustParse("1.1.1"),
 				"foo.v1.1.0": mmsemver.MustParse("1.1.0"),
 			},
-			expected: []string{"foo.v1.1.0", "foo.v1.1.1"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.1.0", "foo.v1.1.1"},
 		},
 		{
 			name: "include unversioned intermediate outside of range",
@@ -453,9 +467,87 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
 				"foo.v0.1.0": mmsemver.MustParse("0.1.0"),
 			},
-			expected: []string{"foo.v1.0.0", "foo.v1.1.0", "foo.v2.0.0"},
+			minimizeSelection: true,
+			expected:          []string{"foo.v1.0.0", "foo.v1.1.0", "foo.v2.0.0"},
 			expectedWarnings: []string{
 				`including bundle "foo.v2.0.0": it is unversioned but is required to ensure inclusion of all bundles in the range`,
+			},
+		},
+		{
+			name: "do not warn when head is in the range",
+			in: declcfg.Channel{Entries: []declcfg.ChannelEntry{
+				{Name: "foo.v2.0.0", Replaces: "foo.v1.1.0"},
+				{Name: "foo.v1.1.0"},
+			}},
+			versionRange: "<=2.0.0",
+			versionMap: map[string]*mmsemver.Version{
+				"foo.v2.0.0": mmsemver.MustParse("2.0.0"),
+				"foo.v1.1.0": mmsemver.MustParse("1.1.0"),
+			},
+			expected: []string{"foo.v1.1.0", "foo.v2.0.0"},
+		},
+		{
+			name: "always keep root of replaces chain, but filter out root entries' skips",
+			in: declcfg.Channel{Entries: []declcfg.ChannelEntry{
+				{
+					Name:     "foo.v2.1.0",
+					Replaces: "foo.v2.0.0",
+					Skips: []string{
+						"foo.v2.0.1",
+						"foo.v2.0.2",
+						"foo.v2.0.3",
+					},
+				},
+				{
+					Name:     "foo.v2.0.0",
+					Replaces: "foo.v1.1.0",
+					Skips: []string{
+						"foo.v1.1.1",
+						"foo.v1.1.2",
+						"foo.v1.1.3",
+					},
+				},
+				{Name: "foo.v1.1.0", Replaces: "foo.v1.0.0"},
+				{Name: "foo.v1.0.0"},
+			}},
+			versionRange: ">=1.0.0 <=1.1.0",
+			versionMap: map[string]*mmsemver.Version{
+				"foo.v2.1.0": mmsemver.MustParse("2.1.0"),
+				"foo.v2.0.3": mmsemver.MustParse("2.0.3"),
+				"foo.v2.0.2": mmsemver.MustParse("2.0.2"),
+				"foo.v2.0.1": mmsemver.MustParse("2.0.1"),
+				"foo.v2.0.0": mmsemver.MustParse("2.0.0"),
+				"foo.v1.1.3": mmsemver.MustParse("1.1.3"),
+				"foo.v1.1.2": mmsemver.MustParse("1.1.2"),
+				"foo.v1.1.1": mmsemver.MustParse("1.1.1"),
+				"foo.v1.1.0": mmsemver.MustParse("1.1.0"),
+				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
+			},
+			expected: []string{"foo.v1.0.0", "foo.v1.1.0", "foo.v2.0.0", "foo.v2.1.0"},
+			expectedWarnings: []string{
+				`including bundle "foo.v2.1.0" with version "2.1.0": it falls outside the specified range of ">=1.0.0 <=1.1.0" but is included to preserve replaces chain from head`,
+				`including bundle "foo.v2.0.0" with version "2.0.0": it falls outside the specified range of ">=1.0.0 <=1.1.0" but is included to preserve replaces chain from head`,
+			},
+		},
+		{
+			name: "always keep head, but not tail",
+			in: declcfg.Channel{Entries: []declcfg.ChannelEntry{
+				{Name: "foo.v2.0.0", Replaces: "foo.v1.1.0"},
+				{Name: "foo.v1.1.0", Replaces: "foo.v1.0.0"},
+				{Name: "foo.v1.0.0", Replaces: "foo.v0.1.0"},
+				{Name: "foo.v0.1.0"},
+			}},
+			versionRange: "1.0.0",
+			versionMap: map[string]*mmsemver.Version{
+				"foo.v2.0.0": mmsemver.MustParse("2.0.0"),
+				"foo.v1.1.0": mmsemver.MustParse("1.1.0"),
+				"foo.v1.0.0": mmsemver.MustParse("1.0.0"),
+				"foo.v0.1.0": mmsemver.MustParse("0.1.0"),
+			},
+			expected: []string{"foo.v1.0.0", "foo.v1.1.0", "foo.v2.0.0"},
+			expectedWarnings: []string{
+				`including bundle "foo.v2.0.0" with version "2.0.0": it falls outside the specified range of "1.0.0" but is included to preserve replaces chain from head`,
+				`including bundle "foo.v1.1.0" with version "1.1.0": it falls outside the specified range of "1.0.0" but is included to preserve replaces chain from head`,
 			},
 		},
 	}
@@ -471,10 +563,13 @@ func TestChannel_FilterByVersionRange(t *testing.T) {
 			require.NoError(t, err)
 			vr, err := mmsemver.NewConstraint(tc.versionRange)
 			require.NoError(t, err)
-			actual := out.filterByVersionRange(vr, tc.versionMap)
+			actual := out.filterByVersionRange(vr, tc.versionMap, tc.minimizeSelection)
 			assert.Equal(t, tc.expected, sets.List(actual))
 			for _, expectedWarning := range tc.expectedWarnings {
 				assert.Contains(t, logOutput.String(), expectedWarning)
+			}
+			if len(tc.expectedWarnings) == 0 {
+				assert.Empty(t, logOutput.String())
 			}
 		})
 	}

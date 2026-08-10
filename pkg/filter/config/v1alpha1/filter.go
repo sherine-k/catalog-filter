@@ -165,7 +165,7 @@ func (f *filter) FilterCatalog(_ context.Context, fbc *declcfg.DeclarativeConfig
 			if err != nil {
 				return nil, err
 			}
-			keepEntries = ch.filterByVersionRange(versionRange, versionMap[fbcCh.Package])
+			keepEntries = ch.filterByVersionRange(versionRange, versionMap[fbcCh.Package], chConfig.MinimizeSelection)
 			if len(keepEntries) == 0 {
 				return nil, fmt.Errorf("package %q channel %q has version range %q that results in an empty channel", fbcCh.Package, fbcCh.Name, chConfig.VersionRange)
 			}
