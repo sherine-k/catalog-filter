@@ -792,15 +792,13 @@ func TestFilter_FilterCatalog_WithLogger(t *testing.T) {
 	assert.Equal(t, &declcfg.DeclarativeConfig{
 		Packages: []declcfg.Package{{Name: "pkg"}},
 		Channels: []declcfg.Channel{{Name: "ch", Package: "pkg", Entries: []declcfg.ChannelEntry{
-			{Name: "b2", Skips: []string{"b1"}},
 			{Name: "b1"},
 		}}},
 		Bundles: []declcfg.Bundle{
 			{Name: "b1", Package: "pkg", Properties: propertiesForBundle("pkg", "1.0.0")},
-			{Name: "b2", Package: "pkg", Properties: propertiesForBundle("pkg", "2.0.0")},
 		},
 	}, out)
-	assert.Contains(t, logOutput.String(), `including bundle "b2" with version "2.0.0"`)
+	assert.Empty(t, logOutput.String(), "a valid matching-only channel needs no connector warning")
 }
 
 func propertiesForBundle(pkg, version string) []property.Property {
@@ -815,52 +813,4 @@ func loadDeclarativeConfig(t *testing.T, fs embed.FS) *declcfg.DeclarativeConfig
 		t.Fatal(err)
 	}
 	return declCfg
-}
-
-func TestIsSpecificVersion(t *testing.T) {
-	type testCase struct {
-		name            string
-		versionRange    string
-		expectedIsExact bool
-		expectedVersion string
-	}
-	testCases := []testCase{
-		{
-			name:            "exact version - min equals max",
-			versionRange:    ">=26.0.8-opr.1 <=26.0.8-opr.1",
-			expectedIsExact: true,
-			expectedVersion: "26.0.8-opr.1",
-		},
-		{
-			name:            "exact version with different format",
-			versionRange:    ">=1.2.3 <=1.2.3",
-			expectedIsExact: true,
-			expectedVersion: "1.2.3",
-		},
-		{
-			name:            "range - min less than max",
-			versionRange:    ">=1.0.0 <2.0.0",
-			expectedIsExact: false,
-			expectedVersion: "",
-		},
-		{
-			name:            "single constraint",
-			versionRange:    ">=1.0.0",
-			expectedIsExact: false,
-			expectedVersion: "",
-		},
-		{
-			name:            "complex prerelease version - equal",
-			versionRange:    ">=1.2.3-alpha.1+build.123 <=1.2.3-alpha.1+build.123",
-			expectedIsExact: true,
-			expectedVersion: "1.2.3-alpha.1+build.123",
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			isExact, version := isSpecificVersion(tc.versionRange)
-			assert.Equal(t, tc.expectedIsExact, isExact, "version range: %s", tc.versionRange)
-			assert.Equal(t, tc.expectedVersion, version, "version range: %s", tc.versionRange)
-		})
-	}
 }

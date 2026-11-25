@@ -73,12 +73,10 @@ func NewMirrorFilter(config FilterConfiguration, filterOpts ...FilterOption) fil
 	}
 }
 
-// OLM's channel traversal logic is basically:
-// * Find the channel head. The channel head is the node that no other entry replaces or skips . If there is more than one of these, fail with "multiple channel heads". If there are 0, also fail because there's a cycle.
-// * Follow the linear replaces chain from the channel head and build a set (let's call in inChain) of those bundle names
-// * For each bundle on the replaces chain, add that bundle's skips names to the inChain set.
-// * Make a set called allEntries containing the names of entry in the channel.
-// * Subtract inChain from allEntries . If items remain in allEntries, fail (there are some dangling bundles)
+// Range filtering checks both our upgrade DAG and OLM's replaces-chain rules.
+// OLM requires one head, follows replaces until a missing or globally skipped
+// target, and rejects entries outside that chain unless skipped by any entry.
+// Missing replaces/skips targets are legal; see validateChannelReplacesChain.
 func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.DeclarativeConfig) (*declcfg.DeclarativeConfig, error) {
 	if fbc == nil {
 		return nil, nil
@@ -157,28 +155,14 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 				keepBundles[ch.Package].Insert(entry.Name)
 			}
 		case versionRange != "":
-			keepEntries := sets.New[string]()
 			rangeConstraint, err := mmsemver.NewConstraint(versionRange)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing version range: %v", err)
 			}
 
-			/*OCPBUGS-61497:
-			isSpecificVersion and specificBundle were implemented to fix a bug where if a user specified the min
-			and max version with the same version, more than one version was returned.
-			This fix this behavior returning only the requested version.*/
-			if isSpecificVer, specificVersion := isSpecificVersion(versionRange); isSpecificVer {
-				ver, err := specificBundle(specificVersion, catalogIndex.BundleVersionsByPkgAndName[ch.Package])
-				if err != nil {
-					return nil, fmt.Errorf("error finding specific bundle: %w", err)
-				}
-				keepEntries.Insert(ver)
-			} else {
-				filteringChannel, err := newChannel(ch, f.opts.Log)
-				if err != nil {
-					return nil, err
-				}
-				keepEntries = filteringChannel.filterByVersionRange(rangeConstraint, catalogIndex.BundleVersionsByPkgAndName[ch.Package])
+			filteredChannel, keepEntries, err := filterChannelByVersionRange(ch, rangeConstraint, catalogIndex.BundleVersionsByPkgAndName[ch.Package], f.opts.Log)
+			if err != nil {
+				return nil, fmt.Errorf("package %q channel %q version range %q: %w", ch.Package, ch.Name, versionRange, err)
 			}
 
 			if len(keepEntries) == 0 {
@@ -189,9 +173,7 @@ func (f *mirrorFilter) FilterCatalog(ctx context.Context, fbc *declcfg.Declarati
 					emptyChannels = append(emptyChannels, ch)
 				}
 			}
-			filteredFBC.Channels[channelIndex].Entries = slices.DeleteFunc(filteredFBC.Channels[channelIndex].Entries, func(e declcfg.ChannelEntry) bool {
-				return !keepEntries.Has(e.Name)
-			})
+			filteredFBC.Channels[channelIndex] = filteredChannel
 			if _, ok := keepBundles[ch.Package]; !ok {
 				keepBundles[ch.Package] = sets.New[string]()
 			}
@@ -402,35 +384,4 @@ func bundleNames(bundles []SelectedBundle) []string {
 		bundleNames = append(bundleNames, bundle.Name)
 	}
 	return bundleNames
-}
-
-// isSpecificVersion checks if a version range represents a specific version match
-// (i.e., min version == max version). This is true for version ranges like ">=26.0.8-opr.1 <=26.0.8-opr.1".
-func isSpecificVersion(versionRange string) (bool, string) {
-	if parts := strings.Fields(versionRange); len(parts) == 2 {
-		minVer := strings.TrimPrefix(parts[0], ">=")
-		maxVer := strings.TrimPrefix(parts[1], "<=")
-
-		if minVer == maxVer {
-			return true, minVer
-		}
-	}
-
-	return false, ""
-}
-
-// specificBundle finds the bundle with the specific version in the bundles map and returns the bundle name
-func specificBundle(specificVersion string, bundles map[string]*mmsemver.Version) (string, error) {
-	specificSemVer, err := mmsemver.NewVersion(specificVersion)
-	if err != nil {
-		return "", fmt.Errorf("error parsing specific version: %w", err)
-	}
-
-	for bundle, bundleVersion := range bundles {
-		if bundleVersion.Equal(specificSemVer) {
-			return bundle, nil
-		}
-	}
-
-	return "", fmt.Errorf("specific version %s not found in bundles", specificVersion)
 }

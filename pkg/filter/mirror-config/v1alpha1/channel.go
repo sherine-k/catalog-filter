@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/operator-framework/operator-registry/alpha/declcfg"
+	"github.com/operator-framework/operator-registry/alpha/model"
 )
 
 type channelEntry struct {
@@ -23,6 +24,114 @@ type channelEntry struct {
 type channel struct {
 	head *channelEntry
 	log  *logrus.Entry
+}
+
+// filterChannelByVersionRange retains every matching explicit entry, including
+// semver-equivalent rebuilds. Only retain out-of-range connectors when the
+// matching-only graph is invalid; never let the legacy traversal lose a match.
+func filterChannelByVersionRange(ch declcfg.Channel, constraint *mmsemver.Constraints, versions map[string]*mmsemver.Version, log *logrus.Entry) (declcfg.Channel, sets.Set[string], error) {
+	// Validate before filtering so selection cannot hide invalid input. Suppress
+	// speculative warnings until a fallback has passed all checks.
+	original, err := newChannel(ch, nullLogger())
+	if err != nil {
+		return declcfg.Channel{}, nil, fmt.Errorf("invalid original channel: %w", err)
+	}
+	if err := validateChannelReplacesChain(ch); err != nil {
+		return declcfg.Channel{}, nil, fmt.Errorf("invalid original channel: %w", err)
+	}
+	matches := sets.New[string]()
+	channelVersions := make(map[string]*mmsemver.Version, len(ch.Entries))
+	for _, entry := range ch.Entries {
+		v := versions[entry.Name]
+		channelVersions[entry.Name] = v
+		if v != nil && constraint.Check(v) {
+			matches.Insert(entry.Name)
+		}
+	}
+	candidate := selectChannelEntries(ch, matches)
+	if len(matches) == 0 {
+		return candidate, matches, nil
+	}
+	if err := validateRangeChannel(candidate); err == nil {
+		return candidate, matches, nil
+	}
+	selected := original.filterByVersionRange(constraint, channelVersions)
+	// Placeholders for dangling references are legal graph nodes, not entries.
+	for name := range selected {
+		if _, explicit := channelVersions[name]; !explicit {
+			selected.Delete(name)
+		}
+	}
+	if missing := sets.List(matches.Difference(selected)); len(missing) > 0 {
+		return declcfg.Channel{}, nil, fmt.Errorf("connector fallback cannot preserve all matching entries; missing: %v", missing)
+	}
+	candidate = selectChannelEntries(ch, selected)
+	if err := validateRangeChannel(candidate); err != nil {
+		return declcfg.Channel{}, nil, fmt.Errorf("connector fallback produces an invalid channel: %w", err)
+	}
+	for _, entry := range candidate.Entries {
+		if matches.Has(entry.Name) {
+			continue
+		}
+		if v := channelVersions[entry.Name]; v == nil {
+			log.Warnf("including bundle %q: it is unversioned but is required to ensure inclusion of all bundles in the range", entry.Name)
+		} else {
+			log.Warnf("including bundle %q with version %q: it falls outside the specified range of %q but is required to ensure inclusion of all bundles in the range", entry.Name, v, constraint)
+		}
+	}
+	return candidate, selected, nil
+}
+
+func selectChannelEntries(ch declcfg.Channel, names sets.Set[string]) declcfg.Channel {
+	entries := make([]declcfg.ChannelEntry, 0, len(names))
+	for _, entry := range ch.Entries {
+		if names.Has(entry.Name) {
+			entries = append(entries, entry)
+		}
+	}
+	ch.Entries = entries
+	return ch
+}
+
+func validateRangeChannel(ch declcfg.Channel) error {
+	if _, err := newChannel(ch, nullLogger()); err != nil {
+		return err
+	}
+	return validateChannelReplacesChain(ch)
+}
+
+// Mirror model.Channel.validateReplacesChain's topology checks, reusing its
+// Head implementation. The dependency's chain validator is private and its
+// public Validate also requires bundle images/properties unrelated to topology.
+// Skips are global, missing targets are legal, and SkipRange is not an edge.
+// Keep newChannel's stricter skip-cycle checks in addition to these checks.
+func validateChannelReplacesChain(ch declcfg.Channel) error {
+	c := model.Channel{Bundles: make(map[string]*model.Bundle, len(ch.Entries))}
+	skipped := sets.New[string]()
+	all := sets.New[string]()
+	for _, entry := range ch.Entries {
+		c.Bundles[entry.Name] = &model.Bundle{Name: entry.Name, Replaces: entry.Replaces, Skips: entry.Skips}
+		all.Insert(entry.Name)
+		skipped.Insert(entry.Skips...)
+	}
+	head, err := c.Head()
+	if err != nil {
+		return err
+	}
+	chain := sets.New[string](head.Name)
+	for cur := head; cur != nil; cur = c.Bundles[cur.Replaces] {
+		if skipped.Has(cur.Replaces) {
+			break
+		}
+		if chain.Has(cur.Replaces) {
+			return fmt.Errorf("detected cycle in replaces chain at %q", cur.Replaces)
+		}
+		chain.Insert(cur.Replaces)
+	}
+	if stranded := sets.List(all.Difference(chain).Difference(skipped)); len(stranded) > 0 {
+		return fmt.Errorf("channel contains one or more stranded bundles: %v", stranded)
+	}
+	return nil
 }
 
 func newChannel(ch declcfg.Channel, log *logrus.Entry) (*channel, error) {

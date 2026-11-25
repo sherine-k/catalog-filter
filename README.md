@@ -8,6 +8,19 @@ Three implementations exist:
 
 The filtering by configuration for oc-mirror is the only implementation that will be maintained for the moment. 
 
+`versionRange` uses Masterminds semver constraints for every range form, including
+bare equality and equal inclusive bounds. All matching entries in each selected
+channel are retained: build metadata does not affect matching, so an exact version
+can select multiple rebuild artifacts. Prereleases follow the library's constraint
+semantics. Entries retain their original fields and order, including dangling
+replaces/skips references (which are legal).
+
+If matching entries alone do not form a valid OLM channel, necessary connectors
+outside the range are retained with warnings, even for equal inclusive bounds.
+If the connector traversal cannot retain every match in a valid channel, filtering
+fails rather than silently losing matches. An empty default channel is an error;
+empty nondefault channels are removed.
+
 A valid configuration file for this implementation would look like: 
 ```yaml
 apiVersion: olm.operatorframework.io/filter/mirror/v1alpha1
@@ -31,4 +44,4 @@ The above filtering would return a file based catalog json (FBC) that contains:
 * within package bar, only 2 channels will remain: bar-channel1 and bar-channel2
 * within package bar, bar-channel1 will be set as the default channel
 * in bar-channel1, all entries between 1.0.0 and 2.0.0 will remain, by following `skip`and `replace` chain. More entries may remain in order to ensure the channel has a single head, and doesn't have cycles 
-* in bar-channel2, all entries between 2.0.0 and 3.0.0 will remain, by following `skip`and `replace` chain. More entries may remain in order to ensure the channel has a single head, and doesn't have cycles 
+* in bar-channel2, all entries between 2.0.0 and 3.0.0 will remain, by following `skip`and `replace` chain. More entries may remain in order to ensure the channel has a single head, and doesn't have cycles
